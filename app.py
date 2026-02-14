@@ -1,36 +1,46 @@
-from flask import Flask, jsonify, request
-from item import Item
+from flask import Flask, jsonify
+from product import Product
+from storage import get_product, save_product, get_all_products
+from services import fetch_from_openfoodfacts
+
 
 app = Flask(__name__)
-
-storage_array = [
-    Item(1, "Bananas", 3, 60),
-    Item(2, "Apple Pie", 18.99, 20)
-]
 
 @app.route("/")
 def hello_world():
     return "<p>Welcome to the Inventory Managememt API!</p>"
 
+@app.route("/products/<barcode>", methods=["GET"])
+def get_product_route(barcode):
+    product = get_product(barcode)
 
-@app.route("/items", methods=["GET"])
-def get_items():
-    data = [i.to_dict() for i in storage_array]
-    return jsonify(data)
+    if product:
+        return jsonify(product.to_dict())
+    
+    external_data = fetch_from_openfoodfacts(barcode)
 
-@app.route("/items/<int:id>", methods=["GET"])
-def get_product(id):
-    item = next((i for i in storage_array if i.id == id), None)
-    return jsonify(item.to_dict() if item else ("Item not found"))
+    if not external_data:
+        return jsonify({"error": "Product not found"}), 404
+    
+    new_product = Product(**external_data)
+    save_product(new_product)
 
-@app.route("/items", methods = ["GET"])
-def create_item():
-    data = request.get_json()
-    new_id = max((i.id for i in storage_array), default=0) + 1
-    new_item = Item(id=new_id, name=data["name"], price=data["price"], stock=data["stock"])
-    storage_array.append(new_item)
-    return jsonify(new_item.to_dict())
+    return jsonify(new_product.to_dict())
 
+@app.route("/products", methods=["GET"])
+def get_all_products_route():
+    products = get_all_products()
+    if products:
+        return jsonify([p.to_dict() for p in products()])
+    else:
+        return ("No Products saved to Inventory")
+
+@app.route("/products", methods=["POST"])
+def add_new_product(barcode):
+    external_data = fetch_from_openfoodfacts(barcode)
+    new_product = Product(**external_data)
+    return jsonify(new_product.to_dict())
+    
 
 
 if __name__ == "__main__":
