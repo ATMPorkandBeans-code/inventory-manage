@@ -1,10 +1,10 @@
-from flask import Flask, jsonify
-from product import Product
-from storage import get_product, save_product, get_all_products
-from services import fetch_from_openfoodfacts
+from flask import Flask, jsonify, request
+from services import get_product_info
 
 
 app = Flask(__name__)
+
+products = []
 
 @app.route("/")
 def hello_world():
@@ -12,37 +12,51 @@ def hello_world():
 
 @app.route("/products/<barcode>", methods=["GET"])
 def get_product_route(barcode):
-    product = get_product(barcode)
-
-    if product:
-        return jsonify(product.to_dict())
-    
-    external_data = fetch_from_openfoodfacts(barcode)
-
-    if not external_data:
-        return jsonify({"error": "Product not found"}), 404
-    
-    new_product = Product(**external_data)
-    save_product(new_product)
-
-    return jsonify(new_product.to_dict())
+    product = [p for p in products if p["barcode"] == barcode]
+    if not product:
+        return "Product at barcode does not exist"
+    return jsonify(product)
 
 @app.route("/products", methods=["GET"])
 def get_all_products_route():
-    products = get_all_products()
     if products:
-        return jsonify([p.to_dict() for p in products()])
+        return jsonify([p for p in products])
     else:
         return ("No Products saved to Inventory")
 
 @app.route("/products", methods=["POST"])
-def add_new_product(barcode):
-    external_data = fetch_from_openfoodfacts(barcode)
-    new_product = Product(**external_data)
-    return jsonify(new_product.to_dict())
-    
+def add_product():
+    data = request.json
+    api_data = get_product_info(data["name"])
+
+    product_id = len(products) + 1
+
+    new_product = {
+        "id": product_id,
+        "name": data["name"],
+        "brand": api_data["brand"],
+        "ingredients": api_data["ingredients"],
+        "price": data["price"],
+        "stock": data["stock"],
+        "barcode": api_data["barcode"]
+    }
+    products.append(new_product)
+
+    return jsonify(new_product), 201
+
+@app.route("/products/<id>", methods=["PATCH"])
+def update_project(id):
+    data = request.get_json()
+    product = ((p for p in products if p["id"] == id), None)
+    if not product:
+        return ("Product not found", 404)
+    product["price"] = data["price"]
+    return jsonify(product)
+
+
 
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
