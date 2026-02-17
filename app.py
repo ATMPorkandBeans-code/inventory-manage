@@ -12,9 +12,9 @@ def hello_world():
 
 @app.route("/products/<barcode>", methods=["GET"])
 def get_product_route(barcode):
-    product = [p for p in products if p["barcode"] == barcode]
+    product = [p for p in products if p["product"]["barcode"] == barcode]
     if not product:
-        return "Product at barcode does not exist"
+        return jsonify("Product at barcode does not exist")
     return jsonify(product)
 
 @app.route("/products", methods=["GET"])
@@ -22,38 +22,52 @@ def get_all_products_route():
     if products:
         return jsonify([p for p in products])
     else:
-        return ("No Products saved to Inventory")
+        return jsonify("No Products saved to Inventory")
 
 @app.route("/products", methods=["POST"])
 def add_product():
     data = request.json
     api_data = get_product_info(data["name"])
 
-    product_id = len(products) + 1
+    for product in products:
+        if product["id"] == api_data["barcode"]:
+            return jsonify("Product already exists in Inventory.")
 
     new_product = {
-        "id": product_id,
+        "id": api_data["barcode"],
+        "product": {
         "name": data["name"],
         "brand": api_data["brand"],
         "ingredients": api_data["ingredients"],
         "price": data["price"],
         "stock": data["stock"],
         "barcode": api_data["barcode"]
-    }
+    }}
     products.append(new_product)
 
     return jsonify(new_product), 201
 
-@app.route("/products/<id>", methods=["PATCH"])
-def update_project(id):
+@app.route("/products/<int:id>", methods=["PATCH"])
+def update_product(id):
     data = request.get_json()
-    product = ((p for p in products if p["id"] == id), None)
+    product = next((p for p in products if str(p["id"]) == str(id)), None)
     if not product:
         return ("Product not found", 404)
-    product["price"] = data["price"]
+    if "price" in data:
+        product["product"]["price"] = data.get("price")
+    elif "stock" in data:
+        product["product"]["stock"] = data.get("stock")
     return jsonify(product)
 
 
+@app.route("/products/<int:id>", methods=["DELETE"])
+def delete_product(id):
+    global products
+    product = next((p for p in products if str(p["id"]) == str(id)))
+    if not product:
+        return ("Product not found", 404)
+    products = ((p for p in products if str(p["id"]) == str(id)))
+    return jsonify("Product deleted")
 
 
 if __name__ == "__main__":

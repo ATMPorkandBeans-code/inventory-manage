@@ -12,7 +12,6 @@ def get_product_info(product_name):
         "page_size": 1,
         "fields": "code"
     }
-
     search_response = requests.get(search_url, params=search_params)
     search_data = search_response.json()
 
